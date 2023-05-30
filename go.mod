@@ -1,3 +1,3 @@
-module github.com/kevinconway/rolling/v2
+module github.com/kevinconway/rolling/v3
 
-go 1.12
+go 1.20

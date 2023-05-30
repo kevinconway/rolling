@@ -1,28 +1,18 @@
-<a id="markdown-rolling" name="rolling"></a>
 # rolling
-[![GoDoc](https://godoc.org/github.com/asecurityteam/rolling?status.svg)](https://godoc.org/github.com/asecurityteam/rolling)
-[![Build Status](https://travis-ci.com/asecurityteam/rolling.png?branch=master)](https://travis-ci.com/asecurityteam/rolling)
-[![codecov.io](https://codecov.io/github/asecurityteam/rolling/coverage.svg?branch=master)](https://codecov.io/github/asecurityteam/rolling?branch=master)
 
-**A rolling/sliding window implementation for Google-golang**
-
-<!-- TOC -->
+**A rolling/sliding window implementation for Go.**
 
 - [rolling](#rolling)
-    - [Usage](#usage)
-        - [Point Window](#point-window)
-        - [Time Window](#time-window)
-    - [Aggregating Windows](#aggregating-windows)
-            - [Custom Aggregations](#custom-aggregations)
-    - [Contributors](#contributors)
-    - [License](#license)
+  - [Usage](#usage)
+    - [Point Window](#point-window)
+    - [Time Window](#time-window)
+  - [Aggregating Windows](#aggregating-windows)
+      - [Custom Aggregations](#custom-aggregations)
+  - [Contributors](#contributors)
+  - [License](#license)
 
-<!-- /TOC -->
-
-<a id="markdown-usage" name="usage"></a>
 ## Usage
 
-<a id="markdown-point-window" name="point-window"></a>
 ### Point Window
 
 ```golang
@@ -54,7 +44,6 @@ latest to preserve the specified value count. This type of window is useful
 for collecting data that have a known interval on which they are capture or
 for tracking data where time is not a factor.
 
-<a id="markdown-time-window" name="time-window"></a>
 ### Time Window
 
 ```golang
@@ -83,7 +72,6 @@ duration then the less data are lost when a bucket expires.
 This type of bucket is most useful for collecting real-time values such as
 request rates, error rates, and latencies of operations.
 
-<a id="markdown-aggregating-windows" name="aggregating-windows"></a>
 ## Aggregating Windows
 
 Each window exposes a `Reduce(func(w Window) float64) float64` method that can
@@ -113,7 +101,6 @@ vary from the *actual* percentile by a small amount. It's a tradeoff of accuracy
 for speed when calculating percentiles from large data sets. For more on the
 p-squared algorithm see: <http://www.cs.wustl.edu/~jain/papers/ftp/psqr.pdf>.
 
-<a id="markdown-custom-aggregations" name="custom-aggregations"></a>
 #### Custom Aggregations
 
 Any function that matches the form of `func(rolling.Window)float64` may be given
@@ -133,7 +120,6 @@ func MyAggregate(w rolling.Window) float64 {
 }
 ```
 
-<a id="markdown-contributors" name="contributors"></a>
 ## Contributors
 
 Pull requests, issues and comments welcome. For pull requests:
@@ -147,22 +133,25 @@ See the existing issues for things to start contributing.
 For bigger changes, make sure you start a discussion first by creating
 an issue and explaining the intended change.
 
-Atlassian requires contributors to sign a Contributor License Agreement,
-known as a CLA. This serves as a record stating that the contributor is
-entitled to contribute the code/documentation/translation to the project
-and is willing to have it used in distributions and derivative works
-(or is willing to transfer ownership).
-
-Prior to accepting your contributions we ask that you please follow the appropriate
-link below to digitally sign the CLA. The Corporate CLA is for those who are
-contributing as a member of an organization and the individual CLA is for
-those contributing as an individual.
-
-*   [CLA for corporate contributors](https://na2.docusign.net/Member/PowerFormSigning.aspx?PowerFormId=e1c17c66-ca4d-4aab-a953-2c231af4a20b)
-*   [CLA for individuals](https://na2.docusign.net/Member/PowerFormSigning.aspx?PowerFormId=3f94fbdc-2fbe-46ac-b14c-5d152700ae5d)
-
-<a id="markdown-license" name="license"></a>
 ## License
 
-Copyright (c) 2017 Atlassian and others.
-Apache 2.0 licensed, see [LICENSE.txt](LICENSE.txt) file.
+This project is forked from <https://github.com/asecurityteam/rolling>. The
+original project's copyright attribution and license terms are:
+```
+Copyright @ 2017 Atlassian Pty Ltd
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+```
+
+The original files are marked with this attribution. All modifications are also
+distributed under the Apache 2.0 license.
