@@ -31,7 +31,9 @@ func TestTimeWindow(t *testing.T) {
 	var p = NewTimePolicy(w, bucketSize)
 	for x := 0; x < numberBuckets; x = x + 1 {
 		p.Append(1)
-		time.Sleep(bucketSize)
+		if x != numberBuckets-1 {
+			time.Sleep(bucketSize)
+		}
 	}
 	var final = p.Reduce(func(w Window[int]) int {
 		var result int
@@ -45,10 +47,12 @@ func TestTimeWindow(t *testing.T) {
 	if final != numberBuckets {
 		t.Fatalf("expected %d values but got %d", numberBuckets, final)
 	}
-
+	time.Sleep(bucketSize) // Wait to ensure the window has gone at least one full duration
 	for x := 0; x < numberBuckets; x = x + 1 {
 		p.Append(2)
-		time.Sleep(bucketSize)
+		if x != numberBuckets-1 {
+			time.Sleep(bucketSize)
+		}
 	}
 
 	final = p.Reduce(func(w Window[int]) int {
@@ -104,30 +108,92 @@ func TestTimeWindowConsistency(t *testing.T) {
 	for offset := range p.window {
 		p.window[offset] = append(p.window[offset], 1)
 	}
-	p.lastWindowTime = time.Now().UnixNano()
-	p.lastWindowOffset = 0
-	var target = time.Unix(1, 0)
+	var start = time.Now()
+	p.lastWindowTime, p.lastWindowOffset = p.selectBucket(start)
+	var sentinelOffset = p.lastWindowOffset
+	var target = start
 	var adjustedTime, bucket = p.selectBucket(target)
 	p.keepConsistent(adjustedTime, bucket)
-	if len(p.window[0]) != 1 {
-		t.Fatal("data loss while adjusting internal state")
+	if len(p.window[sentinelOffset]) != 1 {
+		t.Fatalf("data loss while adjusting internal state %+v", p.window)
 	}
-	target = time.Unix(1, int64(50*time.Millisecond))
+	target = start.Add(bucketSize)
 	adjustedTime, bucket = p.selectBucket(target)
 	p.keepConsistent(adjustedTime, bucket)
-	if len(p.window[0]) != 1 {
-		t.Fatal("data loss while adjusting internal state")
+	if len(p.window[sentinelOffset]) != 1 {
+		t.Fatalf("data loss while adjusting internal state %+v", p.window)
 	}
-	target = time.Unix(1, int64(5*50*time.Millisecond))
+	target = start.Add(5 * bucketSize)
 	adjustedTime, bucket = p.selectBucket(target)
 	p.keepConsistent(adjustedTime, bucket)
-	if len(p.window[0]) != 1 {
-		t.Fatal("data loss while adjusting internal state")
+	if len(p.window[sentinelOffset]) != 1 {
+		t.Fatalf("data loss while adjusting internal state %+v", p.window)
 	}
 	for x := 1; x < 5; x = x + 1 {
-		if len(p.window[x]) != 0 {
-			t.Fatal("internal state not kept consistent during time gap")
+		y := (sentinelOffset + x) % numberBuckets
+		if len(p.window[y]) != 0 {
+			t.Fatalf("internal state not kept consistent during time gap %+v", p.window)
 		}
+	}
+}
+
+func TestTimeWindowPastValuesOutOfRange(t *testing.T) {
+	t.Parallel()
+
+	var bucketSize = time.Millisecond * 50
+	var numberBuckets = 5
+	var w = NewWindow[int](numberBuckets)
+	var p = NewTimePolicy(w, bucketSize)
+
+	var start = time.Now()
+	p.AppendWithTimestamp(1, start)
+	p.AppendWithTimestamp(1, start.Add(bucketSize))
+	p.AppendWithTimestamp(1, start.Add(bucketSize*2))
+	p.AppendWithTimestamp(1, start.Add(bucketSize*3))
+	p.AppendWithTimestamp(1, start.Add(bucketSize*4))
+
+	v := p.ReduceWithTimestamp(Sum[int], start.Add(bucketSize*4))
+	if v != 5 {
+		t.Fatalf("expected %d but got %d: %+v", 5, v, p.window)
+	}
+	p.AppendWithTimestamp(1, start.Add(-bucketSize))
+	v = p.ReduceWithTimestamp(Sum[int], start.Add(bucketSize*4))
+	if v != 5 {
+		t.Fatalf("expected %d but got %d: %+v", 5, v, p.window)
+	}
+	v = p.ReduceWithTimestamp(Sum[int], start.Add(-bucketSize))
+	if v != 0 {
+		t.Fatalf("expected %d but got %d: %+v", 0, v, p.window)
+	}
+}
+
+func TestTimeWindowPastValuesWithinRange(t *testing.T) {
+	t.Parallel()
+
+	var bucketSize = time.Millisecond * 50
+	var numberBuckets = 5
+	var w = NewWindow[int](numberBuckets)
+	var p = NewTimePolicy(w, bucketSize)
+
+	var start = time.Now()
+	p.AppendWithTimestamp(1, start)
+	p.AppendWithTimestamp(1, start.Add(bucketSize))
+	p.AppendWithTimestamp(1, start.Add(bucketSize*2))
+	p.AppendWithTimestamp(1, start.Add(bucketSize*3))
+	p.AppendWithTimestamp(1, start.Add(bucketSize*4))
+
+	v := p.ReduceWithTimestamp(Sum[int], start.Add(bucketSize*4))
+	if v != 5 {
+		t.Fatalf("expected %d but got %d: %+v", 5, v, p.window)
+	}
+	p.AppendWithTimestamp(1, start.Add(bucketSize*2))
+	v = p.ReduceWithTimestamp(Sum[int], start.Add(bucketSize*4))
+	if v != 6 {
+		t.Fatalf("expected %d but got %d: %+v", 6, v, p.window)
+	}
+	v = p.ReduceWithTimestamp(Sum[int], start.Add(2*bucketSize))
+	if v != 6 {
+		t.Fatalf("expected %d but got %d: %+v", 6, v, p.window)
 	}
 }
 
@@ -205,10 +271,11 @@ func BenchmarkTimeWindow(b *testing.B) {
 		b.Run(option.name, func(bt *testing.B) {
 			var w = NewWindow[int](option.numberBuckets)
 			var p = NewTimePolicy(w, option.bucketSize)
+			var start = time.Now()
 			bt.ResetTimer()
 			for n := 0; n < bt.N; n = n + 1 {
 				for x := 0; x < option.insertions; x = x + 1 {
-					p.Append(1)
+					p.AppendWithTimestamp(1, start.Add(time.Duration(x)*option.bucketSize))
 				}
 			}
 		})
