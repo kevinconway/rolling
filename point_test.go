@@ -1,3 +1,4 @@
+// Copyright 2023 Kevin Conway
 // Copyright @ 2017 Atlassian Pty Ltd
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,14 +23,16 @@ import (
 )
 
 func TestPointWindow(t *testing.T) {
+	t.Parallel()
+
 	var numberOfPoints = 100
-	var w = NewWindow(numberOfPoints)
+	var w = NewWindow[int](numberOfPoints)
 	var p = NewPointPolicy(w)
 	for x := 0; x < numberOfPoints; x = x + 1 {
 		p.Append(1)
 	}
-	var final = p.Reduce(func(w Window) float64 {
-		var result float64
+	var final = p.Reduce(func(w Window[int]) int {
+		var result int
 		for _, bucket := range w {
 			for _, p := range bucket {
 				result = result + p
@@ -37,14 +40,16 @@ func TestPointWindow(t *testing.T) {
 		}
 		return result
 	})
-	if final != float64(numberOfPoints) {
+	if final != numberOfPoints {
 		t.Fatal(final)
 	}
 }
 
 func TestPointWindowDataRace(t *testing.T) {
+	t.Parallel()
+
 	var numberOfPoints = 100
-	var w = NewWindow(numberOfPoints)
+	var w = NewWindow[float64](numberOfPoints)
 	var p = NewPointPolicy(w)
 	var stop = make(chan bool)
 	go func() {
@@ -65,7 +70,7 @@ func TestPointWindowDataRace(t *testing.T) {
 			case <-stop:
 				return
 			default:
-				_ = p.Reduce(func(w Window) float64 {
+				_ = p.Reduce(func(w Window[float64]) float64 {
 					for _, bucket := range w {
 						for _, p := range bucket {
 							v = v + p
@@ -87,7 +92,7 @@ func BenchmarkPointWindow(b *testing.B) {
 	for _, size := range bucketSizes {
 		for _, insertion := range insertions {
 			b.Run(fmt.Sprintf("Window Size:%d | Insertions:%d", size, insertion), func(bt *testing.B) {
-				var w = NewWindow(size)
+				var w = NewWindow[int](size)
 				var p = NewPointPolicy(w)
 				bt.ResetTimer()
 				for n := 0; n < bt.N; n = n + 1 {

@@ -1,3 +1,4 @@
+// Copyright 2023 Kevin Conway
 // Copyright @ 2017 Atlassian Pty Ltd
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,18 +21,20 @@ import (
 	"sync"
 )
 
+type Reduction[T Numeric] func(w Window[T]) T
+
 // Count returns the number of elements in a window.
-func Count(w Window) float64 {
+func Count[T Numeric](w Window[T]) T {
 	result := 0
 	for _, bucket := range w {
 		result += len(bucket)
 	}
-	return float64(result)
+	return T(result)
 }
 
 // Sum the values within the window.
-func Sum(w Window) float64 {
-	var result = 0.0
+func Sum[T Numeric](w Window[T]) T {
+	var result T
 	for _, bucket := range w {
 		for _, p := range bucket {
 			result = result + p
@@ -41,9 +44,9 @@ func Sum(w Window) float64 {
 }
 
 // Avg the values within the window.
-func Avg(w Window) float64 {
-	var result = 0.0
-	var count = 0.0
+func Avg[T Numeric](w Window[T]) T {
+	var result T
+	var count T
 	for _, bucket := range w {
 		for _, p := range bucket {
 			result = result + p
@@ -54,14 +57,14 @@ func Avg(w Window) float64 {
 }
 
 // Min the values within the window.
-func Min(w Window) float64 {
-	var result = 0.0
-	var started = true
+func Min[T Numeric](w Window[T]) T {
+	var result T
+	var started bool
 	for _, bucket := range w {
 		for _, p := range bucket {
-			if started {
+			if !started {
 				result = p
-				started = false
+				started = true
 				continue
 			}
 			if p < result {
@@ -73,14 +76,14 @@ func Min(w Window) float64 {
 }
 
 // Max the values within the window.
-func Max(w Window) float64 {
-	var result = 0.0
-	var started = true
+func Max[T Numeric](w Window[T]) T {
+	var result T
+	var started bool
 	for _, bucket := range w {
 		for _, p := range bucket {
-			if started {
+			if !started {
 				result = p
-				started = false
+				started = true
 				continue
 			}
 			if p > result {
@@ -93,10 +96,11 @@ func Max(w Window) float64 {
 
 // Percentile returns an aggregating function that computes the
 // given percentile calculation for a window.
-func Percentile(perc float64) func(w Window) float64 {
-	var values []float64
+func Percentile[T Numeric](perc float64) func(w Window[T]) T {
+	var zero T
+	var values []T
 	var lock = &sync.Mutex{}
-	return func(w Window) float64 {
+	return func(w Window[T]) T {
 		lock.Lock()
 		defer lock.Unlock()
 
@@ -105,9 +109,11 @@ func Percentile(perc float64) func(w Window) float64 {
 			values = append(values, bucket...)
 		}
 		if len(values) < 1 {
-			return 0.0
+			return zero
 		}
-		sort.Float64s(values)
+		sort.SliceStable(values, func(i, j int) bool {
+			return values[i] < values[j]
+		})
 		var position = (float64(len(values))*(perc/100) + .5) - 1
 		var k = int(math.Floor(position))
 		var f = math.Mod(position, 1)
@@ -118,16 +124,16 @@ func Percentile(perc float64) func(w Window) float64 {
 		if plusOne > len(values)-1 {
 			plusOne = k
 		}
-		return ((1 - f) * values[k]) + (f * values[plusOne])
+		return T(((1 - f) * float64(values[k])) + (f * float64(values[plusOne])))
 	}
 }
 
 // FastPercentile implements the pSquare percentile estimation
 // algorithm for calculating percentiles from streams of data
 // using fixed memory allocations.
-func FastPercentile(perc float64) func(w Window) float64 {
+func FastPercentile[T Numeric](perc float64) func(w Window[T]) T {
 	perc = perc / 100.0
-	return func(w Window) float64 {
+	return func(w Window[T]) T {
 		var initalObservations = make([]float64, 0, 5)
 		var q [5]float64
 		var n [5]int
@@ -135,8 +141,8 @@ func FastPercentile(perc float64) func(w Window) float64 {
 		var dnPrime [5]float64
 		var observations uint64
 		for _, bucket := range w {
-			for _, v := range bucket {
-
+			for _, vT := range bucket {
+				v := float64(vT)
 				observations = observations + 1
 				// Record first five observations
 				if observations < 6 {
@@ -210,17 +216,17 @@ func FastPercentile(perc float64) func(w Window) float64 {
 
 			}
 		}
-
+		var zero T
 		if observations < 1 {
-			return 0.0
+			return zero
 		}
 		// If we have less than five values then degenerate into a max function.
 		// This is a reasonable value for data sets this small.
 		if observations < 5 {
 			bubbleSort(initalObservations)
-			return initalObservations[len(initalObservations)-1]
+			return T(initalObservations[len(initalObservations)-1])
 		}
-		return q[2]
+		return T(q[2])
 	}
 }
 

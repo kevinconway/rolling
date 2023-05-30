@@ -1,3 +1,4 @@
+// Copyright 2023 Kevin Conway
 // Copyright @ 2017 Atlassian Pty Ltd
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,9 +19,9 @@ import "sync"
 
 // PointPolicy is a rolling window policy that tracks the last N
 // values inserted regardless of insertion time.
-type PointPolicy struct {
+type PointPolicy[T Numeric] struct {
 	windowSize int
-	window     Window
+	window     Window[T]
 	offset     int
 	lock       *sync.RWMutex
 }
@@ -29,22 +30,22 @@ type PointPolicy struct {
 // input points. The number of points is determined by the size of the given
 // window. Each bucket will contain, at most, one data point when the window
 // is full.
-func NewPointPolicy(window Window) *PointPolicy {
-	var p = &PointPolicy{
+func NewPointPolicy[T Numeric](window Window[T]) *PointPolicy[T] {
+	var p = &PointPolicy[T]{
 		windowSize: len(window),
 		window:     window,
 		lock:       &sync.RWMutex{},
 	}
 	for offset, bucket := range window {
 		if len(bucket) < 1 {
-			window[offset] = make([]float64, 1)
+			window[offset] = make([]T, 1)
 		}
 	}
 	return p
 }
 
 // Append a value to the window.
-func (w *PointPolicy) Append(value float64) {
+func (w *PointPolicy[T]) Append(value T) {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 
@@ -53,7 +54,7 @@ func (w *PointPolicy) Append(value float64) {
 }
 
 // Reduce the window to a single value using a reduction function.
-func (w *PointPolicy) Reduce(f func(Window) float64) float64 {
+func (w *PointPolicy[T]) Reduce(f Reduction[T]) T {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 

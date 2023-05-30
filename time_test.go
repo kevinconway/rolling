@@ -1,3 +1,4 @@
+// Copyright 2023 Kevin Conway
 // Copyright @ 2017 Atlassian Pty Ltd
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,16 +23,18 @@ import (
 )
 
 func TestTimeWindow(t *testing.T) {
+	t.Parallel()
+
 	var bucketSize = time.Millisecond * 100
 	var numberBuckets = 10
-	var w = NewWindow(numberBuckets)
+	var w = NewWindow[int](numberBuckets)
 	var p = NewTimePolicy(w, bucketSize)
 	for x := 0; x < numberBuckets; x = x + 1 {
 		p.Append(1)
 		time.Sleep(bucketSize)
 	}
-	var final = p.Reduce(func(w Window) float64 {
-		var result float64
+	var final = p.Reduce(func(w Window[int]) int {
+		var result int
 		for _, bucket := range w {
 			for _, point := range bucket {
 				result = result + point
@@ -39,8 +42,8 @@ func TestTimeWindow(t *testing.T) {
 		}
 		return result
 	})
-	if final != float64(numberBuckets) {
-		t.Fatal(final)
+	if final != numberBuckets {
+		t.Fatalf("expected %d values but got %d", numberBuckets, final)
 	}
 
 	for x := 0; x < numberBuckets; x = x + 1 {
@@ -48,8 +51,8 @@ func TestTimeWindow(t *testing.T) {
 		time.Sleep(bucketSize)
 	}
 
-	final = p.Reduce(func(w Window) float64 {
-		var result float64
+	final = p.Reduce(func(w Window[int]) int {
+		var result int
 		for _, bucket := range w {
 			for _, point := range bucket {
 				result = result + point
@@ -57,15 +60,17 @@ func TestTimeWindow(t *testing.T) {
 		}
 		return result
 	})
-	if final != 2*float64(numberBuckets) {
-		t.Fatal("got", final, "expected", 2*float64(numberBuckets))
+	if final != 2*numberBuckets {
+		t.Fatalf("got %d but expected %d", final, 2*numberBuckets)
 	}
 }
 
 func TestTimeWindowSelectBucket(t *testing.T) {
+	t.Parallel()
+
 	var bucketSize = time.Millisecond * 50
 	var numberBuckets = 10
-	var w = NewWindow(numberBuckets)
+	var w = NewWindow[int](numberBuckets)
 	var p = NewTimePolicy(w, bucketSize)
 	var target = time.Unix(0, 0)
 	var adjustedTime, bucket = p.selectBucket(target)
@@ -90,9 +95,11 @@ func TestTimeWindowSelectBucket(t *testing.T) {
 }
 
 func TestTimeWindowConsistency(t *testing.T) {
+	t.Parallel()
+
 	var bucketSize = time.Millisecond * 50
 	var numberBuckets = 10
-	var w = NewWindow(numberBuckets)
+	var w = NewWindow[int](numberBuckets)
 	var p = NewTimePolicy(w, bucketSize)
 	for offset := range p.window {
 		p.window[offset] = append(p.window[offset], 1)
@@ -125,9 +132,11 @@ func TestTimeWindowConsistency(t *testing.T) {
 }
 
 func TestTimeWindowDataRace(t *testing.T) {
+	t.Parallel()
+
 	var bucketSize = time.Millisecond
 	var numberBuckets = 1000
-	var w = NewWindow(numberBuckets)
+	var w = NewWindow[float64](numberBuckets)
 	var p = NewTimePolicy(w, bucketSize)
 	var stop = make(chan bool)
 	go func() {
@@ -148,7 +157,7 @@ func TestTimeWindowDataRace(t *testing.T) {
 			case <-stop:
 				return
 			default:
-				_ = p.Reduce(func(w Window) float64 {
+				_ = p.Reduce(func(w Window[float64]) float64 {
 					for _, bucket := range w {
 						for _, p := range bucket {
 							v = v + p
@@ -194,7 +203,7 @@ func BenchmarkTimeWindow(b *testing.B) {
 	b.ResetTimer()
 	for _, option := range options {
 		b.Run(option.name, func(bt *testing.B) {
-			var w = NewWindow(option.numberBuckets)
+			var w = NewWindow[int](option.numberBuckets)
 			var p = NewTimePolicy(w, option.bucketSize)
 			bt.ResetTimer()
 			for n := 0; n < bt.N; n = n + 1 {
