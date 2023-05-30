@@ -16,6 +16,7 @@
 package rolling
 
 import (
+	"context"
 	"sync"
 	"time"
 )
@@ -82,7 +83,7 @@ func (w *TimePolicy[T]) selectBucket(currentTime time.Time) (int64, int) {
 // the past compared to the largest recorded timestamp and those that are equal
 // to or greater than the current largest recorded timestamp. Value that are
 // older than the window are discarded.
-func (w *TimePolicy[T]) AppendWithTimestamp(value T, timestamp time.Time) {
+func (w *TimePolicy[T]) AppendWithTimestamp(ctx context.Context, value T, timestamp time.Time) {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 
@@ -99,8 +100,8 @@ func (w *TimePolicy[T]) AppendWithTimestamp(value T, timestamp time.Time) {
 }
 
 // Append a value to the window using a time bucketing strategy.
-func (w *TimePolicy[T]) Append(value T) {
-	w.AppendWithTimestamp(value, time.Now())
+func (w *TimePolicy[T]) Append(ctx context.Context, value T) {
+	w.AppendWithTimestamp(ctx, value, time.Now())
 }
 
 // ReduceWithTimestamp is the same as Reduce but takes the current timestamp
@@ -111,7 +112,7 @@ func (w *TimePolicy[T]) Append(value T) {
 // Note that the given timestamp determines only which buckets must be emptied
 // and is a mutable operations. The full window of remaining data is always
 // given to the reduction method regardless of the timestamp.
-func (w *TimePolicy[T]) ReduceWithTimestamp(f Reduction[T], timestamp time.Time) T {
+func (w *TimePolicy[T]) ReduceWithTimestamp(ctx context.Context, f Reduction[T], timestamp time.Time) T {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 
@@ -125,10 +126,10 @@ func (w *TimePolicy[T]) ReduceWithTimestamp(f Reduction[T], timestamp time.Time)
 		w.lastWindowTime = adjustedTime
 		w.lastWindowOffset = windowOffset
 	}
-	return f(w.window)
+	return f(ctx, w.window)
 }
 
 // Reduce the window to a single value using a reduction function.
-func (w *TimePolicy[T]) Reduce(f Reduction[T]) T {
-	return w.ReduceWithTimestamp(f, time.Now())
+func (w *TimePolicy[T]) Reduce(ctx context.Context, f Reduction[T]) T {
+	return w.ReduceWithTimestamp(ctx, f, time.Now())
 }

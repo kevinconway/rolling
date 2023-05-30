@@ -16,6 +16,7 @@
 package rolling
 
 import (
+	"context"
 	"fmt"
 	"testing"
 )
@@ -37,13 +38,14 @@ func floatMostlyEquals(a float64, b float64) bool {
 func TestCount(t *testing.T) {
 	t.Parallel()
 
+	ctx := context.Background()
 	var numberOfPoints = 100
 	var w = NewWindow[int](numberOfPoints)
 	var p = NewPointPolicy(w)
 	for x := 1; x <= numberOfPoints; x = x + 1 {
-		p.Append(x)
+		p.Append(ctx, x)
 	}
-	var result = p.Reduce(Count[int])
+	var result = p.Reduce(ctx, Count[int])
 
 	var expected = 100
 	if result != expected {
@@ -54,13 +56,14 @@ func TestCount(t *testing.T) {
 func TestCountPreallocatedWindow(t *testing.T) {
 	t.Parallel()
 
+	ctx := context.Background()
 	var numberOfPoints = 100
 	var w = NewPreallocatedWindow[int](numberOfPoints, 100)
 	var p = NewPointPolicy(w)
 	for x := 1; x <= numberOfPoints; x = x + 1 {
-		p.Append(x)
+		p.Append(ctx, x)
 	}
-	var result = p.Reduce(Count[int])
+	var result = p.Reduce(ctx, Count[int])
 
 	var expected = 100
 	if result != expected {
@@ -71,13 +74,14 @@ func TestCountPreallocatedWindow(t *testing.T) {
 func TestSum(t *testing.T) {
 	t.Parallel()
 
+	ctx := context.Background()
 	var numberOfPoints = 100
 	var w = NewWindow[int](numberOfPoints)
 	var p = NewPointPolicy(w)
 	for x := 1; x <= numberOfPoints; x = x + 1 {
-		p.Append(x)
+		p.Append(ctx, x)
 	}
-	var result = p.Reduce(Sum[int])
+	var result = p.Reduce(ctx, Sum[int])
 
 	var expected = 5050
 	if result != expected {
@@ -88,13 +92,14 @@ func TestSum(t *testing.T) {
 func TestSumFloat(t *testing.T) {
 	t.Parallel()
 
+	ctx := context.Background()
 	var numberOfPoints = 100
 	var w = NewWindow[float64](numberOfPoints)
 	var p = NewPointPolicy(w)
 	for x := 1; x <= numberOfPoints; x = x + 1 {
-		p.Append(float64(x))
+		p.Append(ctx, float64(x))
 	}
-	var result = p.Reduce(Sum[float64])
+	var result = p.Reduce(ctx, Sum[float64])
 
 	var expected = 5050.0
 	if !floatEquals(result, expected) {
@@ -105,13 +110,14 @@ func TestSumFloat(t *testing.T) {
 func TestAvg(t *testing.T) {
 	t.Parallel()
 
+	ctx := context.Background()
 	var numberOfPoints = 100
 	var w = NewWindow[int](numberOfPoints)
 	var p = NewPointPolicy(w)
 	for x := 1; x <= numberOfPoints; x = x + 1 {
-		p.Append(x)
+		p.Append(ctx, x)
 	}
-	var result = p.Reduce(Avg[int])
+	var result = p.Reduce(ctx, Avg[int])
 
 	var expected = 50
 	if result != expected {
@@ -122,13 +128,14 @@ func TestAvg(t *testing.T) {
 func TestAvgFloat(t *testing.T) {
 	t.Parallel()
 
+	ctx := context.Background()
 	var numberOfPoints = 100
 	var w = NewWindow[float64](numberOfPoints)
 	var p = NewPointPolicy(w)
 	for x := 1; x <= numberOfPoints; x = x + 1 {
-		p.Append(float64(x))
+		p.Append(ctx, float64(x))
 	}
-	var result = p.Reduce(Avg[float64])
+	var result = p.Reduce(ctx, Avg[float64])
 
 	var expected = 50.5
 	if !floatEquals(result, expected) {
@@ -139,13 +146,14 @@ func TestAvgFloat(t *testing.T) {
 func TestMax(t *testing.T) {
 	t.Parallel()
 
+	ctx := context.Background()
 	var numberOfPoints = 100
 	var w = NewWindow[int](numberOfPoints)
 	var p = NewPointPolicy(w)
 	for x := 1; x <= numberOfPoints; x = x + 1 {
-		p.Append(100.0 - x)
+		p.Append(ctx, 100.0-x)
 	}
-	var result = p.Reduce(Max[int])
+	var result = p.Reduce(ctx, Max[int])
 
 	var expected = 99
 	if result != expected {
@@ -156,13 +164,14 @@ func TestMax(t *testing.T) {
 func TestMin(t *testing.T) {
 	t.Parallel()
 
+	ctx := context.Background()
 	var numberOfPoints = 100
 	var w = NewWindow[int](numberOfPoints)
 	var p = NewPointPolicy(w)
 	for x := 1; x <= numberOfPoints; x = x + 1 {
-		p.Append(x)
+		p.Append(ctx, x)
 	}
-	var result = p.Reduce(Min[int])
+	var result = p.Reduce(ctx, Min[int])
 
 	var expected = 1
 	if result != expected {
@@ -173,12 +182,13 @@ func TestMin(t *testing.T) {
 func TestPercentileAggregateInterpolateWhenEmpty(t *testing.T) {
 	t.Parallel()
 
+	ctx := context.Background()
 	var numberOfPoints = 0
 	var w = NewWindow[float64](numberOfPoints)
 	var p = NewPointPolicy(w)
 	var perc = 99.9
 	var a = Percentile[float64](perc)
-	var result = p.Reduce(a)
+	var result = p.Reduce(ctx, a)
 	if !floatEquals(result, 0) {
 		t.Fatalf("percentile should be zero but got %f", result)
 	}
@@ -187,15 +197,16 @@ func TestPercentileAggregateInterpolateWhenEmpty(t *testing.T) {
 func TestPercentileAggregateInterpolateWhenInsufficientData(t *testing.T) {
 	t.Parallel()
 
+	ctx := context.Background()
 	var numberOfPoints = 100
 	var w = NewWindow[float64](numberOfPoints)
 	var p = NewPointPolicy(w)
 	for x := 1; x <= numberOfPoints; x = x + 1 {
-		p.Append(float64(x))
+		p.Append(ctx, float64(x))
 	}
 	var perc = 99.9
 	var a = Percentile[float64](perc)
-	var result = p.Reduce(a)
+	var result = p.Reduce(ctx, a)
 
 	// When there are insufficient values to satisfy the precision then the
 	// percentile algorithm degenerates to a max function. In this case, we need
@@ -211,15 +222,16 @@ func TestPercentileAggregateInterpolateWhenInsufficientData(t *testing.T) {
 func TestPercentileAggregateInterpolateWhenSufficientData(t *testing.T) {
 	t.Parallel()
 
+	ctx := context.Background()
 	var numberOfPoints = 1000
 	var w = NewWindow[float64](numberOfPoints)
 	var p = NewPointPolicy(w)
 	for x := 1; x <= numberOfPoints; x = x + 1 {
-		p.Append(float64(x))
+		p.Append(ctx, float64(x))
 	}
 	var perc = 99.9
 	var a = Percentile[float64](perc)
-	var result = p.Reduce(a)
+	var result = p.Reduce(ctx, a)
 	var expected = 999.5
 	if !floatEquals(result, expected) {
 		t.Fatalf("%f percentile calculated incorrectly: %f versus %f", perc, expected, result)
@@ -229,12 +241,13 @@ func TestPercentileAggregateInterpolateWhenSufficientData(t *testing.T) {
 func TestFastPercentileAggregateInterpolateWhenEmpty(t *testing.T) {
 	t.Parallel()
 
+	ctx := context.Background()
 	var numberOfPoints = 0
 	var w = NewWindow[float64](numberOfPoints)
 	var p = NewPointPolicy(w)
 	var perc = 99.9
 	var a = FastPercentile[float64](perc)
-	var result = p.Reduce(a)
+	var result = p.Reduce(ctx, a)
 	if !floatEquals(result, 0) {
 		t.Fatalf("fast percentile should be zero but got %f", result)
 	}
@@ -243,6 +256,7 @@ func TestFastPercentileAggregateInterpolateWhenEmpty(t *testing.T) {
 func TestFastPercentileAggregateInterpolateWhenSufficientData(t *testing.T) {
 	t.Parallel()
 
+	ctx := context.Background()
 	// Using a larger dataset so that the algorithm can converge on the
 	// correct value. Smaller datasets where the value might be interpolated
 	// linearly in the typical percentile calculation results in larger error
@@ -252,11 +266,11 @@ func TestFastPercentileAggregateInterpolateWhenSufficientData(t *testing.T) {
 	var w = NewWindow[float64](numberOfPoints)
 	var p = NewPointPolicy(w)
 	for x := 1; x <= numberOfPoints; x = x + 1 {
-		p.Append(float64(x))
+		p.Append(ctx, float64(x))
 	}
 	var perc = 99.9
 	var a = FastPercentile[float64](perc)
-	var result = p.Reduce(a)
+	var result = p.Reduce(ctx, a)
 	var expected = 9990.0
 	if !floatEquals(result, expected) {
 		t.Fatalf("%f percentile calculated incorrectly: %f versus %f", perc, expected, result)
@@ -266,32 +280,33 @@ func TestFastPercentileAggregateInterpolateWhenSufficientData(t *testing.T) {
 func TestFastPercentileAggregateUsingPSquaredDataSet(t *testing.T) {
 	t.Parallel()
 
+	ctx := context.Background()
 	var numberOfPoints = 20
 	var w = NewWindow[float64](numberOfPoints)
 	var p = NewPointPolicy(w)
-	p.Append(0.02)
-	p.Append(0.15)
-	p.Append(0.74)
-	p.Append(0.83)
-	p.Append(3.39)
-	p.Append(22.37)
-	p.Append(10.15)
-	p.Append(15.43)
-	p.Append(38.62)
-	p.Append(15.92)
-	p.Append(34.60)
-	p.Append(10.28)
-	p.Append(1.47)
-	p.Append(0.40)
-	p.Append(0.05)
-	p.Append(11.39)
-	p.Append(0.27)
-	p.Append(0.42)
-	p.Append(0.09)
-	p.Append(11.37)
+	p.Append(ctx, 0.02)
+	p.Append(ctx, 0.15)
+	p.Append(ctx, 0.74)
+	p.Append(ctx, 0.83)
+	p.Append(ctx, 3.39)
+	p.Append(ctx, 22.37)
+	p.Append(ctx, 10.15)
+	p.Append(ctx, 15.43)
+	p.Append(ctx, 38.62)
+	p.Append(ctx, 15.92)
+	p.Append(ctx, 34.60)
+	p.Append(ctx, 10.28)
+	p.Append(ctx, 1.47)
+	p.Append(ctx, 0.40)
+	p.Append(ctx, 0.05)
+	p.Append(ctx, 11.39)
+	p.Append(ctx, 0.27)
+	p.Append(ctx, 0.42)
+	p.Append(ctx, 0.09)
+	p.Append(ctx, 11.37)
 	var perc = 50.0
 	var a = FastPercentile[float64](perc)
-	var result = p.Reduce(a)
+	var result = p.Reduce(ctx, a)
 	var expected = 4.44
 	if !floatMostlyEquals(result, expected) {
 		t.Fatalf("%f percentile calculated incorrectly: %f versus %f", perc, expected, result)
@@ -301,8 +316,8 @@ func TestFastPercentileAggregateUsingPSquaredDataSet(t *testing.T) {
 var aggregateResult float64
 
 type policy interface {
-	Append(float64)
-	Reduce(Reduction[float64]) float64
+	Append(context.Context, float64)
+	Reduce(context.Context, Reduction[float64]) float64
 }
 type aggregateBench struct {
 	inserts       int
@@ -325,12 +340,13 @@ func BenchmarkAggregates(b *testing.B) {
 	}
 	var insertions = []int{1, 1000, 10000, 100000}
 	var benchCases = make([]*aggregateBench, 0, len(baseCases)*len(insertions))
+	ctx := context.Background()
 	for _, baseCase := range baseCases {
 		for _, inserts := range insertions {
 			var w = NewWindow[float64](inserts)
 			var p = NewPointPolicy(w)
 			for x := 1; x <= inserts; x = x + 1 {
-				p.Append(float64(x))
+				p.Append(ctx, float64(x))
 			}
 			benchCases = append(benchCases, &aggregateBench{
 				inserts:       inserts,
@@ -346,7 +362,7 @@ func BenchmarkAggregates(b *testing.B) {
 			var result float64
 			bt.ResetTimer()
 			for n := 0; n < bt.N; n = n + 1 {
-				result = benchCase.policy.Reduce(benchCase.aggregate)
+				result = benchCase.policy.Reduce(ctx, benchCase.aggregate)
 			}
 			aggregateResult = result
 		})

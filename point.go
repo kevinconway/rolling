@@ -15,7 +15,10 @@
 
 package rolling
 
-import "sync"
+import (
+	"context"
+	"sync"
+)
 
 // PointPolicy is a rolling window policy that tracks the last N
 // values inserted regardless of insertion time.
@@ -45,7 +48,7 @@ func NewPointPolicy[T Numeric](window Window[T]) *PointPolicy[T] {
 }
 
 // Append a value to the window.
-func (w *PointPolicy[T]) Append(value T) {
+func (w *PointPolicy[T]) Append(ctx context.Context, value T) {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 
@@ -54,9 +57,9 @@ func (w *PointPolicy[T]) Append(value T) {
 }
 
 // Reduce the window to a single value using a reduction function.
-func (w *PointPolicy[T]) Reduce(f Reduction[T]) T {
+func (w *PointPolicy[T]) Reduce(ctx context.Context, f Reduction[T]) T {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 
-	return f(w.window)
+	return f(ctx, w.window)
 }

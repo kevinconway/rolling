@@ -16,15 +16,16 @@
 package rolling
 
 import (
+	"context"
 	"math"
 	"sort"
 	"sync"
 )
 
-type Reduction[T Numeric] func(w Window[T]) T
+type Reduction[T Numeric] func(ctx context.Context, w Window[T]) T
 
 // Count returns the number of elements in a window.
-func Count[T Numeric](w Window[T]) T {
+func Count[T Numeric](_ context.Context, w Window[T]) T {
 	result := 0
 	for _, bucket := range w {
 		result += len(bucket)
@@ -33,7 +34,7 @@ func Count[T Numeric](w Window[T]) T {
 }
 
 // Sum the values within the window.
-func Sum[T Numeric](w Window[T]) T {
+func Sum[T Numeric](_ context.Context, w Window[T]) T {
 	var result T
 	for _, bucket := range w {
 		for _, p := range bucket {
@@ -44,7 +45,7 @@ func Sum[T Numeric](w Window[T]) T {
 }
 
 // Avg the values within the window.
-func Avg[T Numeric](w Window[T]) T {
+func Avg[T Numeric](_ context.Context, w Window[T]) T {
 	var result T
 	var count T
 	for _, bucket := range w {
@@ -57,7 +58,7 @@ func Avg[T Numeric](w Window[T]) T {
 }
 
 // Min the values within the window.
-func Min[T Numeric](w Window[T]) T {
+func Min[T Numeric](_ context.Context, w Window[T]) T {
 	var result T
 	var started bool
 	for _, bucket := range w {
@@ -76,7 +77,7 @@ func Min[T Numeric](w Window[T]) T {
 }
 
 // Max the values within the window.
-func Max[T Numeric](w Window[T]) T {
+func Max[T Numeric](_ context.Context, w Window[T]) T {
 	var result T
 	var started bool
 	for _, bucket := range w {
@@ -96,11 +97,11 @@ func Max[T Numeric](w Window[T]) T {
 
 // Percentile returns an aggregating function that computes the
 // given percentile calculation for a window.
-func Percentile[T Numeric](perc float64) func(w Window[T]) T {
+func Percentile[T Numeric](perc float64) func(_ context.Context, w Window[T]) T {
 	var zero T
 	var values []T
 	var lock = &sync.Mutex{}
-	return func(w Window[T]) T {
+	return func(_ context.Context, w Window[T]) T {
 		lock.Lock()
 		defer lock.Unlock()
 
@@ -131,9 +132,9 @@ func Percentile[T Numeric](perc float64) func(w Window[T]) T {
 // FastPercentile implements the pSquare percentile estimation
 // algorithm for calculating percentiles from streams of data
 // using fixed memory allocations.
-func FastPercentile[T Numeric](perc float64) func(w Window[T]) T {
+func FastPercentile[T Numeric](perc float64) func(_ context.Context, w Window[T]) T {
 	perc = perc / 100.0
-	return func(w Window[T]) T {
+	return func(_ context.Context, w Window[T]) T {
 		var initalObservations = make([]float64, 0, 5)
 		var q [5]float64
 		var n [5]int

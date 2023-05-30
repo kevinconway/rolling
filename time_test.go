@@ -16,6 +16,7 @@
 package rolling
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"testing"
@@ -25,17 +26,18 @@ import (
 func TestTimeWindow(t *testing.T) {
 	t.Parallel()
 
+	ctx := context.Background()
 	var bucketSize = time.Millisecond * 100
 	var numberBuckets = 10
 	var w = NewWindow[int](numberBuckets)
 	var p = NewTimePolicy(w, bucketSize)
 	for x := 0; x < numberBuckets; x = x + 1 {
-		p.Append(1)
+		p.Append(ctx, 1)
 		if x != numberBuckets-1 {
 			time.Sleep(bucketSize)
 		}
 	}
-	var final = p.Reduce(func(w Window[int]) int {
+	var final = p.Reduce(ctx, func(_ context.Context, w Window[int]) int {
 		var result int
 		for _, bucket := range w {
 			for _, point := range bucket {
@@ -49,13 +51,13 @@ func TestTimeWindow(t *testing.T) {
 	}
 	time.Sleep(bucketSize) // Wait to ensure the window has gone at least one full duration
 	for x := 0; x < numberBuckets; x = x + 1 {
-		p.Append(2)
+		p.Append(ctx, 2)
 		if x != numberBuckets-1 {
 			time.Sleep(bucketSize)
 		}
 	}
 
-	final = p.Reduce(func(w Window[int]) int {
+	final = p.Reduce(ctx, func(_ context.Context, w Window[int]) int {
 		var result int
 		for _, bucket := range w {
 			for _, point := range bucket {
@@ -140,28 +142,29 @@ func TestTimeWindowConsistency(t *testing.T) {
 func TestTimeWindowPastValuesOutOfRange(t *testing.T) {
 	t.Parallel()
 
+	ctx := context.Background()
 	var bucketSize = time.Millisecond * 50
 	var numberBuckets = 5
 	var w = NewWindow[int](numberBuckets)
 	var p = NewTimePolicy(w, bucketSize)
 
 	var start = time.Now()
-	p.AppendWithTimestamp(1, start)
-	p.AppendWithTimestamp(1, start.Add(bucketSize))
-	p.AppendWithTimestamp(1, start.Add(bucketSize*2))
-	p.AppendWithTimestamp(1, start.Add(bucketSize*3))
-	p.AppendWithTimestamp(1, start.Add(bucketSize*4))
+	p.AppendWithTimestamp(ctx, 1, start)
+	p.AppendWithTimestamp(ctx, 1, start.Add(bucketSize))
+	p.AppendWithTimestamp(ctx, 1, start.Add(bucketSize*2))
+	p.AppendWithTimestamp(ctx, 1, start.Add(bucketSize*3))
+	p.AppendWithTimestamp(ctx, 1, start.Add(bucketSize*4))
 
-	v := p.ReduceWithTimestamp(Sum[int], start.Add(bucketSize*4))
+	v := p.ReduceWithTimestamp(ctx, Sum[int], start.Add(bucketSize*4))
 	if v != 5 {
 		t.Fatalf("expected %d but got %d: %+v", 5, v, p.window)
 	}
-	p.AppendWithTimestamp(1, start.Add(-bucketSize))
-	v = p.ReduceWithTimestamp(Sum[int], start.Add(bucketSize*4))
+	p.AppendWithTimestamp(ctx, 1, start.Add(-bucketSize))
+	v = p.ReduceWithTimestamp(ctx, Sum[int], start.Add(bucketSize*4))
 	if v != 5 {
 		t.Fatalf("expected %d but got %d: %+v", 5, v, p.window)
 	}
-	v = p.ReduceWithTimestamp(Sum[int], start.Add(-bucketSize))
+	v = p.ReduceWithTimestamp(ctx, Sum[int], start.Add(-bucketSize))
 	if v != 0 {
 		t.Fatalf("expected %d but got %d: %+v", 0, v, p.window)
 	}
@@ -170,28 +173,29 @@ func TestTimeWindowPastValuesOutOfRange(t *testing.T) {
 func TestTimeWindowPastValuesWithinRange(t *testing.T) {
 	t.Parallel()
 
+	ctx := context.Background()
 	var bucketSize = time.Millisecond * 50
 	var numberBuckets = 5
 	var w = NewWindow[int](numberBuckets)
 	var p = NewTimePolicy(w, bucketSize)
 
 	var start = time.Now()
-	p.AppendWithTimestamp(1, start)
-	p.AppendWithTimestamp(1, start.Add(bucketSize))
-	p.AppendWithTimestamp(1, start.Add(bucketSize*2))
-	p.AppendWithTimestamp(1, start.Add(bucketSize*3))
-	p.AppendWithTimestamp(1, start.Add(bucketSize*4))
+	p.AppendWithTimestamp(ctx, 1, start)
+	p.AppendWithTimestamp(ctx, 1, start.Add(bucketSize))
+	p.AppendWithTimestamp(ctx, 1, start.Add(bucketSize*2))
+	p.AppendWithTimestamp(ctx, 1, start.Add(bucketSize*3))
+	p.AppendWithTimestamp(ctx, 1, start.Add(bucketSize*4))
 
-	v := p.ReduceWithTimestamp(Sum[int], start.Add(bucketSize*4))
+	v := p.ReduceWithTimestamp(ctx, Sum[int], start.Add(bucketSize*4))
 	if v != 5 {
 		t.Fatalf("expected %d but got %d: %+v", 5, v, p.window)
 	}
-	p.AppendWithTimestamp(1, start.Add(bucketSize*2))
-	v = p.ReduceWithTimestamp(Sum[int], start.Add(bucketSize*4))
+	p.AppendWithTimestamp(ctx, 1, start.Add(bucketSize*2))
+	v = p.ReduceWithTimestamp(ctx, Sum[int], start.Add(bucketSize*4))
 	if v != 6 {
 		t.Fatalf("expected %d but got %d: %+v", 6, v, p.window)
 	}
-	v = p.ReduceWithTimestamp(Sum[int], start.Add(2*bucketSize))
+	v = p.ReduceWithTimestamp(ctx, Sum[int], start.Add(2*bucketSize))
 	if v != 6 {
 		t.Fatalf("expected %d but got %d: %+v", 6, v, p.window)
 	}
@@ -200,6 +204,7 @@ func TestTimeWindowPastValuesWithinRange(t *testing.T) {
 func TestTimeWindowDataRace(t *testing.T) {
 	t.Parallel()
 
+	ctx := context.Background()
 	var bucketSize = time.Millisecond
 	var numberBuckets = 1000
 	var w = NewWindow[float64](numberBuckets)
@@ -211,7 +216,7 @@ func TestTimeWindowDataRace(t *testing.T) {
 			case <-stop:
 				return
 			default:
-				p.Append(1)
+				p.Append(ctx, 1)
 				time.Sleep(time.Millisecond)
 			}
 		}
@@ -223,7 +228,7 @@ func TestTimeWindowDataRace(t *testing.T) {
 			case <-stop:
 				return
 			default:
-				_ = p.Reduce(func(w Window[float64]) float64 {
+				_ = p.Reduce(ctx, func(_ context.Context, w Window[float64]) float64 {
 					for _, bucket := range w {
 						for _, p := range bucket {
 							v = v + p
@@ -251,6 +256,7 @@ func BenchmarkTimeWindow(b *testing.B) {
 	var bucketSizes = []int{1, 10, 100, 1000}
 	var insertions = []int{1, 1000, 10000}
 	var options = make([]timeWindowOptions, 0, len(durations)*len(bucketSizes)*len(insertions))
+	ctx := context.Background()
 	for _, d := range durations {
 		for _, s := range bucketSizes {
 			for _, i := range insertions {
@@ -275,7 +281,7 @@ func BenchmarkTimeWindow(b *testing.B) {
 			bt.ResetTimer()
 			for n := 0; n < bt.N; n = n + 1 {
 				for x := 0; x < option.insertions; x = x + 1 {
-					p.AppendWithTimestamp(1, start.Add(time.Duration(x)*option.bucketSize))
+					p.AppendWithTimestamp(ctx, 1, start.Add(time.Duration(x)*option.bucketSize))
 				}
 			}
 		})
