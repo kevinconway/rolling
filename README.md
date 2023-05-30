@@ -6,7 +6,7 @@
   - [Usage](#usage)
     - [Point Window](#point-window)
     - [Time Window](#time-window)
-  - [Aggregating Windows](#aggregating-windows)
+    - [Aggregating Windows](#aggregating-windows)
       - [Custom Aggregations](#custom-aggregations)
   - [Contributors](#contributors)
   - [License](#license)
@@ -15,23 +15,25 @@
 
 ### Point Window
 
+Rolling point windows record the last `N` data points.
+
 ```golang
-var p = rolling.NewPointPolicy(rolling.NewWindow(5))
+var p = rolling.NewPointPolicy(rolling.NewWindow[int](5))
 
 for x := 0; x < 5; x = x + 1 {
   p.Append(x)
 }
-p.Reduce(func(w Window) float64 {
+p.Reduce(func(w Window[int]) int {
   fmt.Println(w) // [ [0] [1] [2] [3] [4] ]
   return 0
 })
 w.Append(5)
-p.Reduce(func(w Window) float64 {
+p.Reduce(func(w Window[int]) int {
   fmt.Println(w) // [ [5] [1] [2] [3] [4] ]
   return 0
 })
 w.Append(6)
-p.Reduce(func(w Window) float64 {
+p.Reduce(func(w Window[int]) int {
   fmt.Println(w) // [ [5] [6] [2] [3] [4] ]
   return 0
 })
@@ -41,13 +43,16 @@ The above creates a window that always contains 5 data points and then fills
 it with the values 0 - 4. When the next value is appended it will overwrite
 the first value. The window continuously overwrites the oldest value with the
 latest to preserve the specified value count. This type of window is useful
-for collecting data that have a known interval on which they are capture or
+for collecting data that have a known interval on which they are captured or
 for tracking data where time is not a factor.
 
 ### Time Window
 
+Rolling time windows represent all data recorded within the past `T` amount of
+time.
+
 ```golang
-var p = rolling.NewTimeWindow(rolling.NewWindow(3000), time.Millisecond)
+var p = rolling.NewTimeWindow(rolling.NewWindow[int](3000), time.Millisecond)
 var start = time.Now()
 for range time.Tick(time.Millisecond) {
   if time.Since(start) > 3*time.Second {
@@ -72,26 +77,26 @@ duration then the less data are lost when a bucket expires.
 This type of bucket is most useful for collecting real-time values such as
 request rates, error rates, and latencies of operations.
 
-## Aggregating Windows
+### Aggregating Windows
 
-Each window exposes a `Reduce(func(w Window) float64) float64` method that can
-be used to aggregate the data stored within. The method takes in a function
-that can compute the contents of the `Window` into a single value. For
-convenience, this package provides some common reductions:
+Each window exposes a `Reduce(func(ctx context.Context, w Window[T]) T) T`
+method that can be used to aggregate the data stored within. The method takes in
+a function that can compute the contents of the `Window` into a single value.
+For convenience, this package provides some common reductions:
 
 ```golang
-fmt.Println(p.Reduce(rolling.Count))
-fmt.Println(p.Reduce(rolling.Avg))
-fmt.Println(p.Reduce(rolling.Min))
-fmt.Println(p.Reduce(rolling.Max))
-fmt.Println(p.Reduce(rolling.Sum))
-fmt.Println(p.Reduce(rolling.Percentile(99.9)))
-fmt.Println(p.Reduce(rolling.FastPercentile(99.9)))
+fmt.Println(p.Reduce(ctx, rolling.Count[int]))
+fmt.Println(p.Reduce(ctx, rolling.Avg[int]))
+fmt.Println(p.Reduce(ctx, rolling.Min[int]))
+fmt.Println(p.Reduce(ctx, rolling.Max[int]))
+fmt.Println(p.Reduce(ctx, rolling.Sum[int]))
+fmt.Println(p.Reduce(ctx, rolling.Percentile[int](99.9)))
+fmt.Println(p.Reduce(ctx, rolling.FastPercentile[int](99.9)))
 ```
 
 The `Count`, `Avg`, `Min`, `Max`, and `Sum` each perform their expected
-computation. The `Percentile` aggregator first takes the target percentile and
-returns an aggregating function that works identically to the `Sum`, et al.
+computation. The `Percentile` aggregators first take the target percentile and
+returns an aggregating function.
 
 For cases of very large datasets, the `FastPercentile` can be used as a
 replacement for the standard percentile calculation. This alternative version
@@ -103,15 +108,16 @@ p-squared algorithm see: <http://www.cs.wustl.edu/~jain/papers/ftp/psqr.pdf>.
 
 #### Custom Aggregations
 
-Any function that matches the form of `func(rolling.Window)float64` may be given
-to the `Reduce` method of any window policy. The `Window` type is a named
-version of `[][]float64`. Calling `len(window)` will return the number of
-buckets. Each bucket is, itself, a slice of floats where `len(bucket)` is the
-number of values measured within that bucket. Most aggregate will take the form
-of:
+Any function that matches the form of
+`func[T rolling.Numeric](context.Context, rolling.Window[T]) T` may be given to
+the `Reduce` method of any window policy. The `Window[T]` type is a named
+version of `[][]T` where T may be any integer or float type. Calling
+`len(window)` will return the number of buckets. Each bucket is, itself, a slice
+of `T` where `len(bucket)` is the number of values measured within that bucket.
+Most aggregates will take the form of:
 
 ```golang
-func MyAggregate(w rolling.Window) float64 {
+func MyAggregate[T rolling.Numeric](ctx context.Context, w rolling.Window[T]) T {
   for _, bucket := range w {
     for _, value := range bucket {
       // aggregate something
