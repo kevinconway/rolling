@@ -41,7 +41,7 @@ func NewPointPolicy[T Numeric](window Window[T]) *PointPolicy[T] {
 	}
 	for offset, bucket := range window {
 		if len(bucket) < 1 {
-			window[offset] = make([]T, 1)
+			window[offset] = make([]T, 0, 1)
 		}
 	}
 	return p
@@ -52,6 +52,9 @@ func (w *PointPolicy[T]) Append(ctx context.Context, value T) {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 
+	if len(w.window[w.offset]) < 1 {
+		w.window[w.offset] = append(w.window[w.offset], value)
+	}
 	w.window[w.offset][0] = value
 	w.offset = (w.offset + 1) % w.windowSize
 }
