@@ -24,6 +24,19 @@ import (
 
 type Reduction[T Numeric] func(ctx context.Context, w Window[T]) T
 
+// MinimumPoints is a wrapper for any other reduction that prevents
+// the real reduction from running unless there are a sufficient number
+// of data points.
+func MinimumPoints[T Numeric](points int, r Reduction[T]) Reduction[T] {
+	var zero T
+	return func(ctx context.Context, w Window[T]) T {
+		if Count(ctx, w) >= T(points) {
+			return r(ctx, w)
+		}
+		return zero
+	}
+}
+
 // Count returns the number of elements in a window.
 func Count[T Numeric](_ context.Context, w Window[T]) T {
 	result := 0
@@ -53,6 +66,9 @@ func Avg[T Numeric](_ context.Context, w Window[T]) T {
 			result = result + p
 			count = count + 1
 		}
+	}
+	if count == 0 {
+		return 0
 	}
 	return result / count
 }

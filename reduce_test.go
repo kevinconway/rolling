@@ -53,6 +53,30 @@ func TestCount(t *testing.T) {
 	}
 }
 
+func TestMinimumPoints(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	var numberOfPoints = 100
+	var w = NewWindow[int](numberOfPoints)
+	var p = NewPointPolicy(w)
+	p.Append(ctx, 1)
+	var result = p.Reduce(ctx, MinimumPoints(3, Count[int]))
+	if result != 0 {
+		t.Fatalf("minimum points did not guard: %d", result)
+	}
+	p.Append(ctx, 1)
+	result = p.Reduce(ctx, MinimumPoints(3, Count[int]))
+	if result != 0 {
+		t.Fatalf("minimum points did not guard: %d", result)
+	}
+	p.Append(ctx, 1)
+	result = p.Reduce(ctx, MinimumPoints(3, Count[int]))
+	if result != 3 {
+		t.Fatalf("minimum points did not stop guarding guard: %d", result)
+	}
+}
+
 func TestCountPreallocatedWindow(t *testing.T) {
 	t.Parallel()
 
@@ -85,7 +109,7 @@ func TestSum(t *testing.T) {
 
 	var expected = 5050
 	if result != expected {
-		t.Fatalf("avg calculated incorrectly: %d versus %d", expected, result)
+		t.Fatalf("sum calculated incorrectly: %d versus %d", expected, result)
 	}
 }
 
@@ -138,6 +162,21 @@ func TestAvgFloat(t *testing.T) {
 	var result = p.Reduce(ctx, Avg[float64])
 
 	var expected = 50.5
+	if !floatEquals(result, expected) {
+		t.Fatalf("avg calculated incorrectly: %f versus %f", expected, result)
+	}
+}
+
+func TestAvgFloatZeroValuesIsNotNaN(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	var numberOfPoints = 100
+	var w = NewWindow[float64](numberOfPoints)
+	var p = NewPointPolicy(w)
+	var result = p.Reduce(ctx, Avg[float64])
+
+	var expected = 0.0
 	if !floatEquals(result, expected) {
 		t.Fatalf("avg calculated incorrectly: %f versus %f", expected, result)
 	}
