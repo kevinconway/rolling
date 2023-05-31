@@ -1,17 +1,6 @@
-// Copyright 2023 Kevin Conway
-// Copyright @ 2017 Atlassian Pty Ltd
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-FileCopyrightText: © 2023 Kevin Conway
+// SPDX-FileCopyrightText: © 2017 Atlassian Pty Ltd
+// SPDX-License-Identifier: Apache-2.0
 
 package rolling
 
@@ -111,8 +100,9 @@ func Max[T Numeric](_ context.Context, w Window[T]) T {
 	return result
 }
 
-// Percentile returns an aggregating function that computes the
-// given percentile calculation for a window.
+// Percentile returns an aggregating function that computes the given percentile
+// calculation for a window. Percentile values should be given the form 90.0 or
+// 99.9.
 func Percentile[T Numeric](perc float64) func(_ context.Context, w Window[T]) T {
 	var zero T
 	var values []T
@@ -145,9 +135,9 @@ func Percentile[T Numeric](perc float64) func(_ context.Context, w Window[T]) T 
 	}
 }
 
-// FastPercentile implements the pSquare percentile estimation
-// algorithm for calculating percentiles from streams of data
-// using fixed memory allocations.
+// FastPercentile implements the pSquare percentile estimation algorithm for
+// calculating percentiles from streams of data using fixed memory allocations.
+// Percentile values should be given the form 90.0 or 99.9.
 func FastPercentile[T Numeric](perc float64) func(_ context.Context, w Window[T]) T {
 	perc = perc / 100.0
 	return func(_ context.Context, w Window[T]) T {
