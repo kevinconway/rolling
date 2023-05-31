@@ -14,15 +14,6 @@ COVERCOMBINED ::= $(COVERDIR)/combined.out
 GOIMPORT_LOCAL = github.com/kevinconway/
 GOLANGCILINT_CONFIG = $(PROJECT_PATH)/.golangci.yaml
 
-# Tools need to be enumerated here in order to support updating them.
-# They will only be used in the context of the /tools directory which
-# is a special sub-module that is only engaged when handling the tools.
-# We do this to prevent having tools included in the actual project
-# dependencies.
-
-
-UNIT_PKGS = $(shell go list ./...)
-
 update:
 	GO111MODULE=on go get -u
 
@@ -34,7 +25,6 @@ $(BINDIR):
 	GOBIN=$(BINDIR) go install golang.org/x/tools/cmd/goimports@latest
 	GOBIN=$(BINDIR) go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.52.2
 	GOBIN=$(BINDIR) go install github.com/axw/gocov/gocov@v1.1.0 
-	# GOBIN=$(BINDIR) go install github.com/matm/gocov-html@v1.4.0
 	GOBIN=$(BINDIR) go install github.com/matm/gocov-html/cmd/gocov-html@v1.4.0
 	GOBIN=$(BINDIR) go install github.com/AlekSi/gocov-xml@v1.1.0
 	GOBIN=$(BINDIR) go install github.com/wadey/gocovmerge@latest
@@ -64,7 +54,6 @@ test: $(BINDIR) $(COVERDIR)
 		-v \
 		-cover \
 		-race \
-		-coverpkg="$(UNIT_PKGS)" \
 		-coverprofile="$(COVERDIR)/unit.out" \
 		./...
 
