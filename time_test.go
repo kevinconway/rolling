@@ -276,3 +276,40 @@ func BenchmarkTimeWindow(b *testing.B) {
 		})
 	}
 }
+
+func BenchmarkTimeWindowPreallocated(b *testing.B) {
+	var durations = []time.Duration{time.Millisecond}
+	var bucketSizes = []int{1, 10, 100, 1000}
+	var insertions = []int{1, 1000, 10000}
+	var options = make([]timeWindowOptions, 0, len(durations)*len(bucketSizes)*len(insertions))
+	ctx := context.Background()
+	for _, d := range durations {
+		for _, s := range bucketSizes {
+			for _, i := range insertions {
+				options = append(
+					options,
+					timeWindowOptions{
+						name:          fmt.Sprintf("Duration:%v | Buckets:%d | Insertions:%d", d, s, i),
+						bucketSize:    d,
+						numberBuckets: s,
+						insertions:    i,
+					},
+				)
+			}
+		}
+	}
+	b.ResetTimer()
+	for _, option := range options {
+		b.Run(option.name, func(bt *testing.B) {
+			var w = NewPreallocatedWindow[int](option.numberBuckets, option.insertions)
+			var p = NewTimePolicy(w, option.bucketSize)
+			var start = time.Now()
+			bt.ResetTimer()
+			for n := 0; n < bt.N; n = n + 1 {
+				for x := 0; x < option.insertions; x = x + 1 {
+					p.AppendWithTimestamp(ctx, 1, start.Add(time.Duration(x)*option.bucketSize))
+				}
+			}
+		})
+	}
+}
