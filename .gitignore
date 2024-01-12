@@ -229,3 +229,7 @@ flycheck_*.el
 
 # directory configuration
 .dir-locals.el
+
+# project generated files
+.bin/
+.coverage/

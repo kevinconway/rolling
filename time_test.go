@@ -1,6 +1,11 @@
+// SPDX-FileCopyrightText: © 2023 Kevin Conway
+// SPDX-FileCopyrightText: © 2017 Atlassian Pty Ltd
+// SPDX-License-Identifier: Apache-2.0
+
 package rolling
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"testing"
@@ -8,16 +13,21 @@ import (
 )
 
 func TestTimeWindow(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
 	var bucketSize = time.Millisecond * 100
 	var numberBuckets = 10
-	var w = NewWindow(numberBuckets)
+	var w = NewWindow[int](numberBuckets)
 	var p = NewTimePolicy(w, bucketSize)
 	for x := 0; x < numberBuckets; x = x + 1 {
-		p.Append(1)
-		time.Sleep(bucketSize)
+		p.Append(ctx, 1)
+		if x != numberBuckets-1 {
+			time.Sleep(bucketSize)
+		}
 	}
-	var final = p.Reduce(func(w Window) float64 {
-		var result float64
+	var final = p.Reduce(ctx, func(_ context.Context, w Window[int]) int {
+		var result int
 		for _, bucket := range w {
 			for _, point := range bucket {
 				result = result + point
@@ -25,17 +35,19 @@ func TestTimeWindow(t *testing.T) {
 		}
 		return result
 	})
-	if final != float64(numberBuckets) {
-		t.Fatal(final)
+	if final != numberBuckets {
+		t.Fatalf("expected %d values but got %d", numberBuckets, final)
 	}
-
+	time.Sleep(bucketSize) // Wait to ensure the window has gone at least one full duration
 	for x := 0; x < numberBuckets; x = x + 1 {
-		p.Append(2)
-		time.Sleep(bucketSize)
+		p.Append(ctx, 2)
+		if x != numberBuckets-1 {
+			time.Sleep(bucketSize)
+		}
 	}
 
-	final = p.Reduce(func(w Window) float64 {
-		var result float64
+	final = p.Reduce(ctx, func(_ context.Context, w Window[int]) int {
+		var result int
 		for _, bucket := range w {
 			for _, point := range bucket {
 				result = result + point
@@ -43,15 +55,17 @@ func TestTimeWindow(t *testing.T) {
 		}
 		return result
 	})
-	if final != 2*float64(numberBuckets) {
-		t.Fatal("got", final, "expected", 2*float64(numberBuckets))
+	if final != 2*numberBuckets {
+		t.Fatalf("got %d but expected %d", final, 2*numberBuckets)
 	}
 }
 
 func TestTimeWindowSelectBucket(t *testing.T) {
+	t.Parallel()
+
 	var bucketSize = time.Millisecond * 50
 	var numberBuckets = 10
-	var w = NewWindow(numberBuckets)
+	var w = NewWindow[int](numberBuckets)
 	var p = NewTimePolicy(w, bucketSize)
 	var target = time.Unix(0, 0)
 	var adjustedTime, bucket = p.selectBucket(target)
@@ -76,45 +90,114 @@ func TestTimeWindowSelectBucket(t *testing.T) {
 }
 
 func TestTimeWindowConsistency(t *testing.T) {
+	t.Parallel()
+
 	var bucketSize = time.Millisecond * 50
 	var numberBuckets = 10
-	var w = NewWindow(numberBuckets)
+	var w = NewWindow[int](numberBuckets)
 	var p = NewTimePolicy(w, bucketSize)
 	for offset := range p.window {
 		p.window[offset] = append(p.window[offset], 1)
 	}
-	p.lastWindowTime = time.Now().UnixNano()
-	p.lastWindowOffset = 0
-	var target = time.Unix(1, 0)
+	var start = time.Now()
+	p.lastWindowTime, p.lastWindowOffset = p.selectBucket(start)
+	var sentinelOffset = p.lastWindowOffset
+	var target = start
 	var adjustedTime, bucket = p.selectBucket(target)
 	p.keepConsistent(adjustedTime, bucket)
-	if len(p.window[0]) != 1 {
-		t.Fatal("data loss while adjusting internal state")
+	if len(p.window[sentinelOffset]) != 1 {
+		t.Fatalf("data loss while adjusting internal state %+v", p.window)
 	}
-	target = time.Unix(1, int64(50*time.Millisecond))
+	target = start.Add(bucketSize)
 	adjustedTime, bucket = p.selectBucket(target)
 	p.keepConsistent(adjustedTime, bucket)
-	if len(p.window[0]) != 1 {
-		t.Fatal("data loss while adjusting internal state")
+	if len(p.window[sentinelOffset]) != 1 {
+		t.Fatalf("data loss while adjusting internal state %+v", p.window)
 	}
-	target = time.Unix(1, int64(5*50*time.Millisecond))
+	target = start.Add(5 * bucketSize)
 	adjustedTime, bucket = p.selectBucket(target)
 	p.keepConsistent(adjustedTime, bucket)
-	if len(p.window[0]) != 1 {
-		t.Fatal("data loss while adjusting internal state")
+	if len(p.window[sentinelOffset]) != 1 {
+		t.Fatalf("data loss while adjusting internal state %+v", p.window)
 	}
 	for x := 1; x < 5; x = x + 1 {
-		if len(p.window[x]) != 0 {
-			t.Fatal("internal state not kept consistent during time gap")
+		y := (sentinelOffset + x) % numberBuckets
+		if len(p.window[y]) != 0 {
+			t.Fatalf("internal state not kept consistent during time gap %+v", p.window)
 		}
 	}
 }
 
-func TestTimeWindowDataRace(t *testing.T) {
+func TestTimeWindowPastValuesOutOfRange(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	var bucketSize = time.Millisecond * 50
+	var numberBuckets = 5
+	var w = NewWindow[int](numberBuckets)
+	var p = NewTimePolicy(w, bucketSize)
+
+	var start = time.Now()
+	p.AppendWithTimestamp(ctx, 1, start)
+	p.AppendWithTimestamp(ctx, 1, start.Add(bucketSize))
+	p.AppendWithTimestamp(ctx, 1, start.Add(bucketSize*2))
+	p.AppendWithTimestamp(ctx, 1, start.Add(bucketSize*3))
+	p.AppendWithTimestamp(ctx, 1, start.Add(bucketSize*4))
+
+	v := p.ReduceWithTimestamp(ctx, Sum[int], start.Add(bucketSize*4))
+	if v != 5 {
+		t.Fatalf("expected %d but got %d: %+v", 5, v, p.window)
+	}
+	p.AppendWithTimestamp(ctx, 1, start.Add(-bucketSize))
+	v = p.ReduceWithTimestamp(ctx, Sum[int], start.Add(bucketSize*4))
+	if v != 5 {
+		t.Fatalf("expected %d but got %d: %+v", 5, v, p.window)
+	}
+	v = p.ReduceWithTimestamp(ctx, Sum[int], start.Add(-bucketSize))
+	if v != 0 {
+		t.Fatalf("expected %d but got %d: %+v", 0, v, p.window)
+	}
+}
+
+func TestTimeWindowPastValuesWithinRange(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	var bucketSize = time.Millisecond * 50
+	var numberBuckets = 5
+	var w = NewWindow[int](numberBuckets)
+	var p = NewTimePolicy(w, bucketSize)
+
+	var start = time.Now()
+	p.AppendWithTimestamp(ctx, 1, start)
+	p.AppendWithTimestamp(ctx, 1, start.Add(bucketSize))
+	p.AppendWithTimestamp(ctx, 1, start.Add(bucketSize*2))
+	p.AppendWithTimestamp(ctx, 1, start.Add(bucketSize*3))
+	p.AppendWithTimestamp(ctx, 1, start.Add(bucketSize*4))
+
+	v := p.ReduceWithTimestamp(ctx, Sum[int], start.Add(bucketSize*4))
+	if v != 5 {
+		t.Fatalf("expected %d but got %d: %+v", 5, v, p.window)
+	}
+	p.AppendWithTimestamp(ctx, 1, start.Add(bucketSize*2))
+	v = p.ReduceWithTimestamp(ctx, Sum[int], start.Add(bucketSize*4))
+	if v != 6 {
+		t.Fatalf("expected %d but got %d: %+v", 6, v, p.window)
+	}
+	v = p.ReduceWithTimestamp(ctx, Sum[int], start.Add(2*bucketSize))
+	if v != 6 {
+		t.Fatalf("expected %d but got %d: %+v", 6, v, p.window)
+	}
+}
+
+func TestTimeWindowConcurrentDataRace(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
 	var bucketSize = time.Millisecond
 	var numberBuckets = 1000
-	var w = NewWindow(numberBuckets)
-	var p = NewTimePolicy(w, bucketSize)
+	var w = NewWindow[float64](numberBuckets)
+	var p = NewTimePolicyConcurrent(w, bucketSize)
 	var stop = make(chan bool)
 	go func() {
 		for {
@@ -122,7 +205,7 @@ func TestTimeWindowDataRace(t *testing.T) {
 			case <-stop:
 				return
 			default:
-				p.Append(1)
+				p.Append(ctx, 1)
 				time.Sleep(time.Millisecond)
 			}
 		}
@@ -134,7 +217,7 @@ func TestTimeWindowDataRace(t *testing.T) {
 			case <-stop:
 				return
 			default:
-				_ = p.Reduce(func(w Window) float64 {
+				_ = p.Reduce(ctx, func(_ context.Context, w Window[float64]) float64 {
 					for _, bucket := range w {
 						for _, p := range bucket {
 							v = v + p
@@ -162,6 +245,7 @@ func BenchmarkTimeWindow(b *testing.B) {
 	var bucketSizes = []int{1, 10, 100, 1000}
 	var insertions = []int{1, 1000, 10000}
 	var options = make([]timeWindowOptions, 0, len(durations)*len(bucketSizes)*len(insertions))
+	ctx := context.Background()
 	for _, d := range durations {
 		for _, s := range bucketSizes {
 			for _, i := range insertions {
@@ -179,13 +263,73 @@ func BenchmarkTimeWindow(b *testing.B) {
 	}
 	b.ResetTimer()
 	for _, option := range options {
-		b.Run(option.name, func(bt *testing.B) {
-			var w = NewWindow(option.numberBuckets)
+		b.Run("Base |"+option.name, func(bt *testing.B) {
+			var w = NewWindow[int](option.numberBuckets)
 			var p = NewTimePolicy(w, option.bucketSize)
+			var start = time.Now()
 			bt.ResetTimer()
 			for n := 0; n < bt.N; n = n + 1 {
 				for x := 0; x < option.insertions; x = x + 1 {
-					p.Append(1)
+					p.AppendWithTimestamp(ctx, 1, start.Add(time.Duration(x)*option.bucketSize))
+				}
+			}
+		})
+		b.Run("Concurrent Safe |"+option.name, func(bt *testing.B) {
+			var w = NewWindow[int](option.numberBuckets)
+			var p = NewTimePolicyConcurrent(w, option.bucketSize)
+			var start = time.Now()
+			bt.ResetTimer()
+			for n := 0; n < bt.N; n = n + 1 {
+				for x := 0; x < option.insertions; x = x + 1 {
+					p.AppendWithTimestamp(ctx, 1, start.Add(time.Duration(x)*option.bucketSize))
+				}
+			}
+		})
+	}
+}
+
+func BenchmarkTimeWindowPreallocated(b *testing.B) {
+	var durations = []time.Duration{time.Millisecond}
+	var bucketSizes = []int{1, 10, 100, 1000}
+	var insertions = []int{1, 1000, 10000}
+	var options = make([]timeWindowOptions, 0, len(durations)*len(bucketSizes)*len(insertions))
+	ctx := context.Background()
+	for _, d := range durations {
+		for _, s := range bucketSizes {
+			for _, i := range insertions {
+				options = append(
+					options,
+					timeWindowOptions{
+						name:          fmt.Sprintf("Duration:%v | Buckets:%d | Insertions:%d", d, s, i),
+						bucketSize:    d,
+						numberBuckets: s,
+						insertions:    i,
+					},
+				)
+			}
+		}
+	}
+	b.ResetTimer()
+	for _, option := range options {
+		b.Run("Base |"+option.name, func(bt *testing.B) {
+			var w = NewPreallocatedWindow[int](option.numberBuckets, option.insertions)
+			var p = NewTimePolicy(w, option.bucketSize)
+			var start = time.Now()
+			bt.ResetTimer()
+			for n := 0; n < bt.N; n = n + 1 {
+				for x := 0; x < option.insertions; x = x + 1 {
+					p.AppendWithTimestamp(ctx, 1, start.Add(time.Duration(x)*option.bucketSize))
+				}
+			}
+		})
+		b.Run("Concurrent Safe |"+option.name, func(bt *testing.B) {
+			var w = NewPreallocatedWindow[int](option.numberBuckets, option.insertions)
+			var p = NewTimePolicyConcurrent(w, option.bucketSize)
+			var start = time.Now()
+			bt.ResetTimer()
+			for n := 0; n < bt.N; n = n + 1 {
+				for x := 0; x < option.insertions; x = x + 1 {
+					p.AppendWithTimestamp(ctx, 1, start.Add(time.Duration(x)*option.bucketSize))
 				}
 			}
 		})
