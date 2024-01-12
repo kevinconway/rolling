@@ -190,14 +190,14 @@ func TestTimeWindowPastValuesWithinRange(t *testing.T) {
 	}
 }
 
-func TestTimeWindowDataRace(t *testing.T) {
+func TestTimeWindowConcurrentDataRace(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
 	var bucketSize = time.Millisecond
 	var numberBuckets = 1000
 	var w = NewWindow[float64](numberBuckets)
-	var p = NewTimePolicy(w, bucketSize)
+	var p = NewTimePolicyConcurrent(w, bucketSize)
 	var stop = make(chan bool)
 	go func() {
 		for {
@@ -263,9 +263,20 @@ func BenchmarkTimeWindow(b *testing.B) {
 	}
 	b.ResetTimer()
 	for _, option := range options {
-		b.Run(option.name, func(bt *testing.B) {
+		b.Run("Base |"+option.name, func(bt *testing.B) {
 			var w = NewWindow[int](option.numberBuckets)
 			var p = NewTimePolicy(w, option.bucketSize)
+			var start = time.Now()
+			bt.ResetTimer()
+			for n := 0; n < bt.N; n = n + 1 {
+				for x := 0; x < option.insertions; x = x + 1 {
+					p.AppendWithTimestamp(ctx, 1, start.Add(time.Duration(x)*option.bucketSize))
+				}
+			}
+		})
+		b.Run("Concurrent Safe |"+option.name, func(bt *testing.B) {
+			var w = NewWindow[int](option.numberBuckets)
+			var p = NewTimePolicyConcurrent(w, option.bucketSize)
 			var start = time.Now()
 			bt.ResetTimer()
 			for n := 0; n < bt.N; n = n + 1 {
@@ -300,9 +311,20 @@ func BenchmarkTimeWindowPreallocated(b *testing.B) {
 	}
 	b.ResetTimer()
 	for _, option := range options {
-		b.Run(option.name, func(bt *testing.B) {
+		b.Run("Base |"+option.name, func(bt *testing.B) {
 			var w = NewPreallocatedWindow[int](option.numberBuckets, option.insertions)
 			var p = NewTimePolicy(w, option.bucketSize)
+			var start = time.Now()
+			bt.ResetTimer()
+			for n := 0; n < bt.N; n = n + 1 {
+				for x := 0; x < option.insertions; x = x + 1 {
+					p.AppendWithTimestamp(ctx, 1, start.Add(time.Duration(x)*option.bucketSize))
+				}
+			}
+		})
+		b.Run("Concurrent Safe |"+option.name, func(bt *testing.B) {
+			var w = NewPreallocatedWindow[int](option.numberBuckets, option.insertions)
+			var p = NewTimePolicyConcurrent(w, option.bucketSize)
 			var start = time.Now()
 			bt.ResetTimer()
 			for n := 0; n < bt.N; n = n + 1 {

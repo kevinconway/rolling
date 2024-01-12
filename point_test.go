@@ -36,13 +36,13 @@ func TestPointWindow(t *testing.T) {
 	}
 }
 
-func TestPointWindowDataRace(t *testing.T) {
+func TestPointWindowConcurrentDataRace(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
 	var numberOfPoints = 100
 	var w = NewWindow[float64](numberOfPoints)
-	var p = NewPointPolicy(w)
+	var p = NewPointPolicyConcurrent(w)
 	var stop = make(chan bool)
 	go func() {
 		for {
@@ -84,9 +84,19 @@ func BenchmarkPointWindow(b *testing.B) {
 	var insertions = []int{1, 1000, 10000}
 	for _, size := range bucketSizes {
 		for _, insertion := range insertions {
-			b.Run(fmt.Sprintf("Window Size:%d | Insertions:%d", size, insertion), func(bt *testing.B) {
+			b.Run(fmt.Sprintf("Base | Window Size:%d | Insertions:%d", size, insertion), func(bt *testing.B) {
 				var w = NewWindow[int](size)
 				var p = NewPointPolicy(w)
+				bt.ResetTimer()
+				for n := 0; n < bt.N; n = n + 1 {
+					for x := 0; x < insertion; x = x + 1 {
+						p.Append(ctx, 1)
+					}
+				}
+			})
+			b.Run(fmt.Sprintf("Concurrent Safe | Window Size:%d | Insertions:%d", size, insertion), func(bt *testing.B) {
+				var w = NewWindow[int](size)
+				var p = NewPointPolicyConcurrent(w)
 				bt.ResetTimer()
 				for n := 0; n < bt.N; n = n + 1 {
 					for x := 0; x < insertion; x = x + 1 {
